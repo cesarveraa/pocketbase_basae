@@ -1,35 +1,19 @@
-# Etapa build: compilar PocketBase a partir de tu código local
-FROM golang:1.20-alpine AS builder
+FROM alpine:3.18
 
-# Instala dependencias necesarias
-RUN apk add --no-cache libc6-compat
+# Instala utilidades necesarias
+RUN apk add --no-cache curl unzip
 
-WORKDIR /app
+# Descarga la versión estable de PocketBase (ajusta la versión según requieras)
+RUN curl -fsSL https://github.com/pocketbase/pocketbase/releases/download/v0.16.7/pocketbase_0.16.7_linux_amd64.zip -o pb.zip \
+    && unzip pb.zip -d /pb \
+    && rm pb.zip
 
-# Copia únicamente los ficheros de módulos para aprovechar la cache de Docker
-COPY go.mod go.sum ./
-RUN go mod download
+WORKDIR /pb
 
-# Copia todo tu código local de PocketBase
-COPY . .
+# Crea la carpeta de datos si no existe
+RUN mkdir -p /pb/pb_data
 
-# Compila el binario de PocketBase
-# Ajusta la ruta si tu comando principal está en otro paquete
-RUN go build -o pocketbase ./cmd/pocketbase
-
-# Etapa runtime: contenedor ligero con el binario ya compilado
-FROM alpine:latest
-
-RUN apk add --no-cache ca-certificates
-
-WORKDIR /app
-
-# Copia el binario desde la etapa builder
-COPY --from=builder /app/pocketbase /app/pocketbase
-
-# (Opcional) copia tu carpeta de datos si la quieres versionar o inicializar
-# COPY pb_data /app/pb_data
-
+# Exponemos el puerto 8090
 EXPOSE 8090
 
-ENTRYPOINT ["/app/pocketbase", "serve", "--http=0.0.0.0:8090"]
+CMD ["./pocketbase", "serve", "--http=0.0.0.0:8090", "--dir=/pb/pb_data"]
